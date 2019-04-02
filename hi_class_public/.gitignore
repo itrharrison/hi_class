@@ -1,0 +1,12 @@
+init_files/
+output/
+*~
+build/
+class
+*.prof
+libclass.a
+*out
+python/classy.c
+python/*.pyc
+python/build/i
+ini_files
