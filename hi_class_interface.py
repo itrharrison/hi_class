@@ -235,11 +235,12 @@ def get_class_outputs(block, c_classy, config):
     grr = np.array([c_classy.growthrate_at_z(zi) for zi in z])
     
     # Save growth stuff
-    #block[names.growth, 'sigma8_at_z'] = s8
-    #block[names.growth, 'growthrate_at_z'] = grr
+    block[growthparams, 's8_z'] = s8
+    block[growthparams, 'grr_z'] = grr
     block[growthparams, 'z'] = z
-    f_z = np.array([c_classy.linear_growth_rate(zi) for zi in z])
-    block[growthparams, 'f_z'] = f_z
+    #f_z = np.array([c_classy.linear_growth_rate(zi) for zi in z])
+    #block[growthparams, 'f_z'] = f_z
+    block[growthparams, 'f_z'] = grr
     D_z = np.array([c_classy.linear_growth_factor(zi) for zi in z])
     block[growthparams, 'D_z'] = D_z
 
