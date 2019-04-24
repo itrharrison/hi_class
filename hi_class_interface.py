@@ -109,8 +109,7 @@ def get_class_inputs(block, config):
                 expansion_smg_string = '{0}, {1}, {2}'.format(0.5, block.get_double(cosmo, 'w'), block.get_double(cosmo, 'wa'))
                 params['expansion_smg'] = expansion_smg_string
 
-            params['Omega_Lambda'] = block.get_double(cosmo, 'omega_lambda', default = 0.)
-            #params['Omega_fld'] = block.get_double(horndeski, 'omega_fld', default = 0.)
+            params['Omega_Lambda'] = block.get_double(horndeski, 'omega_lambda_smg', default = 0.0)
             params['Omega_fld'] = 0.0
             params['Omega_smg'] = block.get_int(horndeski, 'omega_smg', default = -1)
 
