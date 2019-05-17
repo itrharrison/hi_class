@@ -39,6 +39,7 @@ cdef extern from "class.h":
         int index_bg_H
         int index_bg_D
         int index_bg_f
+        int index_bg_mpl_running_smg
         short long_info
         short inter_normal
         double T_cmb

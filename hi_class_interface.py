@@ -1,5 +1,6 @@
 import os
 from cosmosis.datablock import names, option_section
+from scipy.integrate import cumtrapz
 import sys
 import traceback
 import pdb
@@ -67,6 +68,7 @@ def get_class_inputs(block, config):
         'T_cmb':        block.get_double(cosmo, 't_cmb', default=2.726),
         'N_ur':         block.get_double(cosmo, 'N_ur', default=3.046),
         'k_pivot':      block.get_double(cosmo, 'k_pivot', default=0.05),
+        'z_max_pk' : config['zmax']
         }
     params['sBBN file'] = config['sBBN file']
 
@@ -178,7 +180,7 @@ def get_class_outputs(block, c_classy, config):
     ##
     #pdb.set_trace()
     block[cosmo, 'sigma_8'] = c_classy.sigma8()
-    h0 = c_classy.Hubble(0.)/100.#block[cosmo, 'h0']
+    h0 = block[cosmo, 'h0']
     block[cosmo, 'omega_m'] = c_classy.Omega_m()
     block[cosmo, 'omega_lambda_smg'] = c_classy.Omega_smg()
     ##
@@ -224,6 +226,15 @@ def get_class_outputs(block, c_classy, config):
     block[distances, 'd_m'] = d_a * (1+z)
     block[distances, 'H'] = np.array([c_classy.Hubble(zi) for zi in z])
     block[distances, 'mu'] = 5.*np.log10(d_l + 1e-100) + 25.
+
+    #Save the gravitaional wave luminosity distance
+    #d_gw = np.array([c_classy.gw_luminosity_distance(zi) for zi in z])
+    #block[distances, 'd_gw'] = d_gw
+
+    # !!! why necessary to divide?
+    alpha_mz = ([c_classy.alpha_m_at_z(zi)/c_classy.Omega_smg() for zi in z])
+    block[distances, 'alpha_mz'] = alpha_mz
+    block[distances, 'd_l_gw'] = np.exp(0.5*cumtrapz(alpha_mz/(1. + z), z, initial=0)) # actually the ratio
     
     #Save some auxiliary related parameters
     block[distances, 'age'] = c_classy.age()
@@ -238,8 +249,6 @@ def get_class_outputs(block, c_classy, config):
     block[growthparams, 's8_z'] = s8
     block[growthparams, 'grr_z'] = grr
     block[growthparams, 'z'] = z
-    #f_z = np.array([c_classy.linear_growth_rate(zi) for zi in z])
-    #block[growthparams, 'f_z'] = f_z
     block[growthparams, 'f_z'] = grr
     D_z = np.array([c_classy.linear_growth_factor(zi) for zi in z])
     block[growthparams, 'D_z'] = D_z

@@ -37,3 +37,7 @@ Plots
 -----
 
 - The plot in plots/models_Dl_fisgma8.png shows a quick validation test, and should be compared to Figures 3 and 4 of Noller and Nicola 2018 (https://arxiv.org/abs/1811.12928)
+
+Acknowledgements
+----------------
+Emilio Bellini and Dina Traykova for the original version of this wrapper and helpful comments!

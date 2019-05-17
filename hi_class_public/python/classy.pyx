@@ -762,6 +762,25 @@ cdef class Class:
         self.compute(["thermodynamics"])
         return self.th.rs_d
 
+    def alpha_m_at_z(self, z):
+        cdef double tau
+        cdef int last_index #junk
+        cdef double * pvecback
+
+        pvecback = <double*> calloc(self.ba.bg_size,sizeof(double))
+
+        if background_tau_of_z(&self.ba,z,&tau)==_FAILURE_:
+            raise CosmoSevereError(self.ba.error_message)
+
+        if background_at_tau(&self.ba,tau,self.ba.long_info,self.ba.inter_normal,&last_index,pvecback)==_FAILURE_:
+            raise CosmoSevereError(self.ba.error_message)
+
+        alpha_m = pvecback[self.ba.index_bg_mpl_running_smg]
+
+        free(pvecback)
+
+        return alpha_m
+
 
     def growthrate_at_k_and_z(self,k,z):
         dz = 0.005
