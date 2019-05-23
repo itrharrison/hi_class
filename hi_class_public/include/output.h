@@ -11,7 +11,7 @@
  * written in output files
  */
 
-#define _Z_PK_NUM_MAX_ 175
+#define _Z_PK_NUM_MAX_ 500
 
 /**
  * Structure containing various informations on the output format,
