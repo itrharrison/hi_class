@@ -69,7 +69,7 @@ def get_class_inputs(block, config):
         'T_cmb':        block.get_double(cosmo, 't_cmb', default=2.726),
         'N_ur':         block.get_double(cosmo, 'N_ur', default=3.046),
         'k_pivot':      block.get_double(cosmo, 'k_pivot', default=0.05),
-        #'z_max_pk' : config['zmax_pk']
+        'z_max_pk' : config['zmax']
         }
     params['sBBN file'] = config['sBBN file']
 
