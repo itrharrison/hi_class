@@ -29,7 +29,8 @@ def setup(options):
     #the length of the chain
     config = {
         'lmax': options.get_int(option_section,'lmax', default=2500),
-        'zmax': options.get_double(option_section,'zmax', default=1.),
+        'zmax': options.get_double(option_section,'zmax', default=3.),
+        #'zmax_pk': options.get_double(option_section,'zmax_pk', default=3.),            #TB experiment
         'kmax': options.get_double(option_section,'kmax', default=1.0),
         'debug': options.get_bool(option_section, 'debug', default=False),
         'lensing': options.get_string(option_section, 'lensing', default = 'yes'),
@@ -62,7 +63,7 @@ def get_class_inputs(block, config):
         'P_k_max_h/Mpc': config["kmax"],
         'lensing':       config["lensing"],
 #        'background_verbose': config["background_verbose"],
-        'z_pk': ', '.join(str(z) for z in np.arange(0.0, config['zmax'], 0.01)),
+        'z_pk': ', '.join(str(z) for z in np.arange(0.0, config['zmax'], 0.1)),
         'n_s':          block[cosmo, 'n_s'],
         'omega_b':      block[cosmo, 'ombh2'],
         'omega_cdm':    block[cosmo, 'omch2'],
