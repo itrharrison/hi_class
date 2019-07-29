@@ -22,6 +22,7 @@ distances = names.distances
 cmb_cl = names.cmb_cl
 growthparams  = names.growth_parameters 
 horndeski = 'horndeski_parameters'
+perturbations = 'perturbations'
 
 def setup(options):
     #Read options from the ini file which are fixed across
@@ -37,6 +38,7 @@ def setup(options):
         'modes':  options.get_string(option_section, 'modes', default = 's'),
         'output': options.get_string(option_section, 'output', default = 'tCl,lCl,pCl,mPk,mTk'),
         'sBBN file': options.get_string(option_section, 'sBBN_file'),
+        'k_output_values' : options.get_string(option_section, 'k_output_values', default='')
         #'skip_stability_tests_smg': options.get_string(option_section, 'skip_stability_tests_smg', default = 'no'),
         #'background_verbose': options.get_int(option_section,'background_verbose', default=1),
         #'thermodynamics_verbose': options.get_int(option_section,'thermodynamics_verbose', default=10)
@@ -68,9 +70,12 @@ def get_class_inputs(block, config):
         'T_cmb':        block.get_double(cosmo, 't_cmb', default=2.726),
         'N_ur':         block.get_double(cosmo, 'N_ur', default=3.046),
         'k_pivot':      block.get_double(cosmo, 'k_pivot', default=0.05),
-        'z_max_pk' : config['zmax']
+        'z_max_pk' : config['zmax'],
         }
     params['sBBN file'] = config['sBBN file']
+
+    if config['k_output_values'] != '':
+        params['k_output_values'] = config['k_output_values']
 
     if block.has_value(cosmo, '100*theta_s'):
         params['100*theta_s'] = block[cosmo, '100*theta_s']
@@ -230,11 +235,14 @@ def get_class_outputs(block, c_classy, config):
     #Save the gravitaional wave luminosity distance
     #d_gw = np.array([c_classy.gw_luminosity_distance(zi) for zi in z])
     #block[distances, 'd_gw'] = d_gw
-
-    # !!! why necessary to divide?
-    alpha_mz = ([c_classy.alpha_m_at_z(zi)/c_classy.Omega_smg() for zi in z])
-    block[distances, 'alpha_mz'] = alpha_mz
-    block[distances, 'd_l_gw'] = np.exp(0.5*cumtrapz(alpha_mz/(1. + z), z, initial=0)) # actually the ratio
+    if not block.has_value(horndeski, 'omega_smg') or (block[horndeski,'omega_smg'] == 0.):
+        block[distances, 'd_l_gw'] = np.ones_like(d_l)
+        block[distances, 'alpha_mz'] = np.zeros_like(d_l)
+    else:
+        # !!! why necessary to divide?
+        alpha_mz = ([c_classy.alpha_m_at_z(zi)/c_classy.Omega_smg() for zi in z])
+        block[distances, 'alpha_mz'] = alpha_mz
+        block[distances, 'd_l_gw'] = np.exp(0.5*cumtrapz(alpha_mz/(1. + z), z, initial=0)) # actually the ratio
     
     #Save some auxiliary related parameters
     block[distances, 'age'] = c_classy.age()
@@ -277,12 +285,22 @@ def get_class_outputs(block, c_classy, config):
         block[cmb_cl, s] = c_ell_data[s][2:] * f
     block[cmb_cl, 'pp'] = c_ell_data['pp'][2:] * f1
 
+    # Get perturbations, here only phi and psi
+    if config['k_output_values'] != '':
+        perts = c_classy.get_perturbations()
+        #pdb.set_trace()
+        for ik,k in enumerate(config['k_output_values'].split(',')):
+            block[perturbations, 'psi_k_{0}'.format(k)] = perts['scalar'][ik]['psi']
+            block[perturbations, 'phi_k_{0}'.format(k)] = perts['scalar'][ik]['phi']
+            block[perturbations, 'a_k_{0}'.format(k)] = perts['scalar'][ik]['a']
+
 def execute(block, config):
     c_classy = config['cosmo']
 
    # try:
         # Set input parameters
     params = get_class_inputs(block, config)
+    #print(params)
     c_classy.set(params)
     #print(c_classy.pars)
     try:
