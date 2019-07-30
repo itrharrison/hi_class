@@ -1,6 +1,7 @@
 import os
 from cosmosis.datablock import names, option_section
 from scipy.integrate import cumtrapz
+from scipy import interpolate
 import sys
 import traceback
 import pdb
@@ -289,10 +290,30 @@ def get_class_outputs(block, c_classy, config):
     # Get perturbations, here only phi and psi
     if config['k_output_values'] != '':
         perts = c_classy.get_perturbations()
-        #pdb.set_trace()
+        a_bgd = 1./(1. + z)
+        pdb.set_trace()
+        k = np.asarray(config['k_output_values'].split(','), dtype=float)
+        nk = len(k)
+        psi = np.zeros((nk, nz))
+        phi = np.zeros((nk, nz))
+
+        for i,ki in enumerate(k):
+            psi_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['psi'], bounds_error=False)
+            phi_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['phi'], bounds_error=False)
+            psi[i,:] = psi_spl(a_bgd)
+            phi[i,:] = phi_spl(a_bgd)
+
+        block.put_grid("psi", "k_h", k/h0, "a", a_bgd, "psi", psi)
+        block.put_grid("phi", "k_h", k/h0, "a", a_bgd, "phi", phi)
+
+        # for validation of interpolation above
         for ik,k in enumerate(config['k_output_values'].split(',')):
             block[perturbations, 'psi_k_{0}'.format(k)] = perts['scalar'][ik]['psi']
             block[perturbations, 'phi_k_{0}'.format(k)] = perts['scalar'][ik]['phi']
+            block[perturbations, 'delta_g_{0}'.format(k)] = perts['scalar'][ik]['delta_g']
+            block[perturbations, 'delta_b_{0}'.format(k)] = perts['scalar'][ik]['delta_b']
+            block[perturbations, 'delta_ur_{0}'.format(k)] = perts['scalar'][ik]['delta_ur']
+            block[perturbations, 'delta_cdm_{0}'.format(k)] = perts['scalar'][ik]['delta_cdm']
             block[perturbations, 'a_k_{0}'.format(k)] = perts['scalar'][ik]['a']
 
 def execute(block, config):
@@ -303,7 +324,7 @@ def execute(block, config):
     params = get_class_inputs(block, config)
     #print(params)
     c_classy.set(params)
-    #print(c_classy.pars)
+    print(c_classy.pars)
     try:
         # Run calculations
         c_classy.compute()
