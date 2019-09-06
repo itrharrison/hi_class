@@ -76,7 +76,7 @@ enum selection_type {gaussian,tophat,dirac};
 /**
  * maximum number of k-values for perturbation output
  */
-#define _MAX_NUMBER_OF_K_FILES_ 30
+#define _MAX_NUMBER_OF_K_FILES_ 200
 
 //@}
 
