@@ -10,7 +10,7 @@ import pdb
 dirname = os.path.split(__file__)[0]
 #enable debugging from the same directory
 if not dirname.strip(): dirname='.'
-install_dir = dirname+"/hi_class_public/classy_install/lib/python2.7/site-packages/"
+install_dir = dirname+'/hi_class_public/classy_install/lib/python2.7/site-packages/'
 sys.path.insert(0, install_dir)
 
 import classy
@@ -40,7 +40,8 @@ def setup(options):
         'modes':  options.get_string(option_section, 'modes', default = 's'),
         'output': options.get_string(option_section, 'output', default = 'tCl,lCl,pCl,mPk,mTk'),
         'sBBN file': options.get_string(option_section, 'sBBN_file'),
-        'k_output_values' : options.get_string(option_section, 'k_output_values', default='')
+        'k_output_values' : options.get_string(option_section, 'k_output_values', default=''),
+        'do_qs' : options.get_bool(option_section, 'do_quasi_static', default=False)
         #'skip_stability_tests_smg': options.get_string(option_section, 'skip_stability_tests_smg', default = 'no'),
         #'background_verbose': options.get_int(option_section,'background_verbose', default=1),
         #'thermodynamics_verbose': options.get_int(option_section,'thermodynamics_verbose', default=10)
@@ -52,18 +53,18 @@ def setup(options):
     #Return all this config information
     return config
 
-def get_class_inputs(block, config):
+def get_class_inputs(block, config, qs_gr_flag=False):
 
     #Get parameters from block and give them the
     #names and form that class expects
 
     params = {
-        'output':        config["output"],
-        'modes':         config["modes"],
-        'l_max_scalars': config["lmax"],
-        'P_k_max_h/Mpc': config["kmax"],
-        'lensing':       config["lensing"],
-#        'background_verbose': config["background_verbose"],
+        'output':        config['output'],
+        'modes':         config['modes'],
+        'l_max_scalars': config['lmax'],
+        'P_k_max_h/Mpc': config['kmax'],
+        'lensing':       config['lensing'],
+#        'background_verbose': config['background_verbose'],
         'z_pk': ', '.join(str(z) for z in np.arange(0.0, config['zmax'], 0.1)),
         'n_s':          block[cosmo, 'n_s'],
         'omega_b':      block[cosmo, 'ombh2'],
@@ -172,16 +173,61 @@ def get_class_inputs(block, config):
             print 'm_nu', len(m_nu)
             print 'omega_nu', len(o_nu)
             if len(m_nu)>0:
-                params['m_ncdm'] = ",".join(map(str, m_nu))
+                params['m_ncdm'] = ','.join(map(str, m_nu))
                 print 'm in'
             if len(o_nu)>0:
                 print 'omega in'
-                params['omega_ncdm'] = ",".join(map(str, o_nu))
-            params['T_ncdm'] = ",".join(map(str, T_nu))
+                params['omega_ncdm'] = ','.join(map(str, o_nu))
+            params['T_ncdm'] = ','.join(map(str, T_nu))
 
     return params
 
-def get_class_outputs(block, c_classy, config):
+def get_class_outputs_gr(block, c_classy, config):
+
+    h0 = block[cosmo, 'h0']
+
+    #Ranges of the redshift and matter power
+    dz = 0.01
+    kmin = 1e-5 #1e-4
+    kmax = config['kmax']*h0
+    nk = 200 #1e-5
+
+    #Define k,z we want to sample
+    z = np.arange(0.0, config['zmax']+dz, dz)
+    k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
+    nz = len(z)
+
+    # Get perturbations, here only phi and psi
+    if config['k_output_values'] != '':
+        perts = c_classy.get_perturbations()
+        a_bgd = 1./(1. + z)
+        #pdb.set_trace()
+        k = np.asarray(config['k_output_values'].split(','), dtype=float)
+        nk = len(k)
+        psi = np.zeros((nk, nz))
+        phi = np.zeros((nk, nz))
+        psi_gr = np.zeros((nk, nz))
+        phi_gr = np.zeros((nk, nz))
+
+        for ik,k_label in enumerate(k):
+            psi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['psi'], bounds_error=False)
+            phi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['phi'], bounds_error=False)
+            psi_gr[ik,:] = psi_spl(a_bgd)
+            phi_gr[ik,:] = phi_spl(a_bgd)
+
+            block[cosmo, 'mu0_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)][-1]/perts['scalar'][ik]['psi'][-1]
+            block[cosmo, 'Sigma0_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)][-1] + block[perturbations, 'psi_k_{0}'.format(k_label)][-1])/(perts['scalar'][ik]['psi'][-1] + perts['scalar'][ik]['psi'][-1])
+
+        _, _, psi = block.get_grid('perturbations', 'k_h', 'a','psi')
+        _, _, phi = block.get_grid('perturbations', 'k_h', 'a','phi')
+
+        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'D', (psi + phi)/(psi_gr + phi_gr))
+        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'Sigma', (psi + phi)/(psi_gr + phi_gr))
+        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'eta', psi/phi)
+        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'mu', (psi)/(psi_gr))
+
+
+def get_class_outputs(block, c_classy, config, qs_gr_flag=False):
     ##
     ## Derived cosmological parameters
     ##
@@ -201,7 +247,7 @@ def get_class_outputs(block, c_classy, config):
     nk = 200 #1e-5
 
     #Define k,z we want to sample
-    z = np.arange(0.0, config["zmax"]+dz, dz)
+    z = np.arange(0.0, config['zmax']+dz, dz)
     k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
     nz = len(z)
 
@@ -215,8 +261,8 @@ def get_class_outputs(block, c_classy, config):
             P[i,j] = c_classy.pk(ki,zj)
 
     #Save matter power as a grid
-    block.put_grid("matter_power_lin", "k_h", k/h0, "z", z, "p_k", P*h0**3)
-#    block.put_grid("matter_power_nl", "k_h", k/h0, "z", z, "p_k", P*h0**3)
+    block.put_grid('matter_power_lin', 'k_h', k/h0, 'z', z, 'p_k', P*h0**3)
+#    block.put_grid('matter_power_nl', 'k_h', k/h0, 'z', z, 'p_k', P*h0**3)
     ##
     ##Distances and related quantities
     ##
@@ -275,7 +321,7 @@ def get_class_outputs(block, c_classy, config):
     ell = ell[2:]
 
     #Save the ell range
-    block[cmb_cl, "ell"] = ell
+    block[cmb_cl, 'ell'] = ell
 
     #t_cmb is in K, convert to mu_K, and add ell(ell+1) factor
     tcmb_muk = block[cosmo, 't_cmb'] * 1e6
@@ -291,30 +337,57 @@ def get_class_outputs(block, c_classy, config):
     if config['k_output_values'] != '':
         perts = c_classy.get_perturbations()
         a_bgd = 1./(1. + z)
-        pdb.set_trace()
+        #pdb.set_trace()
         k = np.asarray(config['k_output_values'].split(','), dtype=float)
         nk = len(k)
         psi = np.zeros((nk, nz))
         phi = np.zeros((nk, nz))
+        psi_gr = np.zeros((nk, nz))
+        phi_gr = np.zeros((nk, nz))
 
-        for i,ki in enumerate(k):
-            psi_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['psi'], bounds_error=False)
-            phi_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['phi'], bounds_error=False)
-            psi[i,:] = psi_spl(a_bgd)
-            phi[i,:] = phi_spl(a_bgd)
+        #for i,ki in enumerate(k):
+        for ik,k_label in enumerate(k):
+            psi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['psi'], bounds_error=False)
+            phi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['phi'], bounds_error=False)
+            psi[ik,:] = psi_spl(a_bgd)
+            phi[ik,:] = phi_spl(a_bgd)
 
-        block.put_grid("psi", "k_h", k/h0, "a", a_bgd, "psi", psi)
-        block.put_grid("phi", "k_h", k/h0, "a", a_bgd, "phi", phi)
+            block[perturbations, 'psi_k_{0}'.format(k_label)] = perts['scalar'][ik]['psi']
+            block[perturbations, 'phi_k_{0}'.format(k_label)] = perts['scalar'][ik]['phi']
+            #block[perturbations, 'delta_g_{0}'.format(k_label)] = perts['scalar'][ik]['delta_g']
+            #block[perturbations, 'delta_b_{0}'.format(k_label)] = perts['scalar'][ik]['delta_b']
+            #block[perturbations, 'delta_ur_{0}'.format(k_label)] = perts['scalar'][ik]['delta_ur']
+            #block[perturbations, 'delta_cdm_{0}'.format(k_label)] = perts['scalar'][ik]['delta_cdm']
+            block[perturbations, 'a_k_{0}'.format(k_label)] = perts['scalar'][ik]['a']
 
+        block.put_grid('perturbations', 'k_h', k/h0, 'a', a_bgd, 'psi', psi)
+        block.put_grid('perturbations', 'k_h', k/h0, 'a', a_bgd, 'phi', phi)
+        '''
         # for validation of interpolation above
-        for ik,k in enumerate(config['k_output_values'].split(',')):
-            block[perturbations, 'psi_k_{0}'.format(k)] = perts['scalar'][ik]['psi']
-            block[perturbations, 'phi_k_{0}'.format(k)] = perts['scalar'][ik]['phi']
-            block[perturbations, 'delta_g_{0}'.format(k)] = perts['scalar'][ik]['delta_g']
-            block[perturbations, 'delta_b_{0}'.format(k)] = perts['scalar'][ik]['delta_b']
-            block[perturbations, 'delta_ur_{0}'.format(k)] = perts['scalar'][ik]['delta_ur']
-            block[perturbations, 'delta_cdm_{0}'.format(k)] = perts['scalar'][ik]['delta_cdm']
-            block[perturbations, 'a_k_{0}'.format(k)] = perts['scalar'][ik]['a']
+        for ik,k_label in enumerate(k):
+            #pdb.set_trace()
+            if qs_gr_flag:
+                #block[perturbations, 'mu_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)]/perts['scalar'][ik]['psi']
+                #block[perturbations, 'Sigma_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)] + block[perturbations, 'psi_k_{0}'.format(k_label)])/(perts['scalar'][ik]['psi'] + perts['scalar'][ik]['psi'])
+                block[cosmo, 'mu0_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)][-1]/perts['scalar'][ik]['psi'][-1]
+                block[cosmo, 'Sigma0_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)][-1] + block[perturbations, 'psi_k_{0}'.format(k_label)][-1])/(perts['scalar'][ik]['psi'][-1] + perts['scalar'][ik]['psi'][-1])
+            else:
+                
+
+        if qs_gr_flag:
+
+            for i,ki in enumerate(k):
+                psi_gr_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['psi'], bounds_error=False)
+                phi_gr_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['phi'], bounds_error=False)
+                psi_gr[i,:] = psi_spl(a_bgd)
+                phi_gr[i,:] = phi_spl(a_bgd)
+
+            block.put_grid('Sigma', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'Sigma', (psi + phi)/(psi_gr + phi_gr))
+            block['modified_gravity', 'k_h'] = k/h0
+            block['modified_gravity', 'z'] = 1./a_bgd - 1
+            block['modified_gravity', 'D'] = (psi + phi)/(psi_gr + phi_gr)
+        '''
+
 
 def execute(block, config):
     c_classy = config['cosmo']
@@ -322,24 +395,46 @@ def execute(block, config):
    # try:
         # Set input parameters
     params = get_class_inputs(block, config)
-    #print(params)
     c_classy.set(params)
-    print(c_classy.pars)
     try:
         # Run calculations
         c_classy.compute()
+        print(params)
         # Extract outputs
         get_class_outputs(block, c_classy, config)
     except classy.CosmoError as error:
         if config['debug']:
-            sys.stderr.write("Error in class. You set debug=T so here is more debug info:\n")
+            sys.stderr.write('Error in class. You set debug=T so here is more debug info:\n')
             traceback.print_exc(file=sys.stderr)
         else:
-            sys.stderr.write("Error in class. Set debug=T for info: {}\n".format(error))
+            sys.stderr.write('Error in class. Set debug=T for info: {}\n'.format(error))
         return 1
     finally:
         #Reset for re-use next time
         c_classy.struct_cleanup()
+
+    #pdb.set_trace()
+    if config['do_qs']:
+        params = get_class_inputs(block, config)
+        params['parameters_smg'] = '1.0,0.0,0.0,0.0,1.0'
+        print(params)
+        c_classy.set(params)
+        try:
+            # Run calculations
+            c_classy.compute()
+            # Extract outputs
+            get_class_outputs_gr(block, c_classy, config)
+        except classy.CosmoError as error:
+            if config['debug']:
+                sys.stderr.write('Error in class. You set debug=T so here is more debug info:\n')
+                traceback.print_exc(file=sys.stderr)
+            else:
+                sys.stderr.write('Error in class. Set debug=T for info: {}\n'.format(error))
+            return 1
+        finally:
+            #Reset for re-use next time
+            c_classy.struct_cleanup()
+
     return 0
 
 def cleanup(config):
@@ -349,10 +444,10 @@ def smg_params(block):
     snl =[]
     for i in range(1,20):
         if block.has_value(horndeski, 'parameters_smg__%i'% i):
-            snl.append(block[horndeski, 'parameters_smg__%i'% i]) # "propto_omega" -> x_k, x_b, x_m, x_t, M*^2_ini (default)
+            snl.append(block[horndeski, 'parameters_smg__%i'% i]) # 'propto_omega' -> x_k, x_b, x_m, x_t, M*^2_ini (default)
         else:
             break
-    smg = ",".join(map(str, snl))
+    smg = ','.join(map(str, snl))
     return smg
 
 def smg_exp(block):
@@ -362,5 +457,5 @@ def smg_exp(block):
             snl_exp.append(block[cosmo, 'expansion_smg__%i'% i])
         else:
             break
-    smg_exp = ",".join(map(str, snl_exp))
+    smg_exp = ','.join(map(str, snl_exp))
     return smg_exp
