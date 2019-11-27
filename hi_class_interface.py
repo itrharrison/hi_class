@@ -13,7 +13,7 @@ if not dirname.strip(): dirname='.'
 install_dir = dirname+'/hi_class_public/classy_install/lib/python2.7/site-packages/'
 sys.path.insert(0, install_dir)
 
-import classy
+import hi_classy as classy
 import numpy as np
 
 #These are pre-defined strings we use as datablock
@@ -170,13 +170,13 @@ def get_class_inputs(block, config, qs_gr_flag=False):
                 if block.has_value(cosmo, 'omega_ncdm__%i'%i):
                     o_nu.append(block[cosmo, 'omega_ncdm__%i'%i])
                     T_nu.append(block[cosmo, 'T_ncdm__%i'%i])
-            print 'm_nu', len(m_nu)
-            print 'omega_nu', len(o_nu)
+            print('m_nu', len(m_nu))
+            print('omega_nu', len(o_nu))
             if len(m_nu)>0:
                 params['m_ncdm'] = ','.join(map(str, m_nu))
-                print 'm in'
+                print('m in')
             if len(o_nu)>0:
-                print 'omega in'
+                print('omega in')
                 params['omega_ncdm'] = ','.join(map(str, o_nu))
             params['T_ncdm'] = ','.join(map(str, T_nu))
 

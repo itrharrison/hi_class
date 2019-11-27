@@ -22,12 +22,12 @@ with open(os.path.join('..', 'include', 'common.h'), 'r') as v_file:
             break
 
 setup(
-    name='classy',
+    name='hi_classy',
     version=VERSION,
     description='Python interface to the Cosmological Boltzmann code CLASS',
     url='http://www.class-code.net',
     cmdclass={'build_ext': build_ext},
-    ext_modules=[Extension("classy", ["classy.pyx"],
+    ext_modules=[Extension("hi_classy", ["hi_classy.pyx"],
                            include_dirs=[nm.get_include(), "../include"],
                            libraries=["class"],
                            library_dirs=["../", GCCPATH],

@@ -6,7 +6,7 @@
 # If, for whatever reason, you need an other, existing parameter from Class,
 # remember to add it inside this cdef.
 
-DEF _MAX_NUMBER_OF_K_FILES_ = 30
+DEF _MAX_NUMBER_OF_K_FILES_ = 200
 DEF _MAXTITLESTRINGLENGTH_ = 8000
 DEF _FILENAMESIZE_ = 256
 DEF _LINE_LENGTH_MAX_ = 1024
