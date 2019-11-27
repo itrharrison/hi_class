@@ -10,7 +10,8 @@ import pdb
 dirname = os.path.split(__file__)[0]
 #enable debugging from the same directory
 if not dirname.strip(): dirname='.'
-install_dir = dirname+'/hi_class_public/classy_install/lib/python2.7/site-packages/'
+#install_dir = dirname+'/hi_class_public/classy_install/lib/python2.7/site-packages/'
+install_dir = '/Users/harrison/Dropbox/code_mcr/cosmosis/conda/lib/python2.7/site-packages/'
 sys.path.insert(0, install_dir)
 
 import hi_classy as classy
@@ -33,6 +34,8 @@ def setup(options):
         'zmax': options.get_double(option_section,'zmax', default=3.),
         #'zmax_pk': options.get_double(option_section,'zmax_pk', default=3.),            #TB experiment
         'kmax': options.get_double(option_section,'kmax', default=1.0),
+        'kmin' : options.get_double(option_section,'kmin', default=1.e-5),
+        'nk' : options.get_int(option_section,'nk', default=100),
         'debug': options.get_bool(option_section, 'debug', default=False),
         'lensing': options.get_string(option_section, 'lensing', default = 'yes'),
         'expansion_model': options.get_string(option_section, 'expansion_model', default = 'lcdm'),
@@ -40,7 +43,7 @@ def setup(options):
         'modes':  options.get_string(option_section, 'modes', default = 's'),
         'output': options.get_string(option_section, 'output', default = 'tCl,lCl,pCl,mPk,mTk'),
         'sBBN file': options.get_string(option_section, 'sBBN_file'),
-        'k_output_values' : options.get_string(option_section, 'k_output_values', default=''),
+        #'k_output_values' : options.get_string(option_section, 'k_output_values', default=''),
         'do_qs' : options.get_bool(option_section, 'do_quasi_static', default=False)
         #'skip_stability_tests_smg': options.get_string(option_section, 'skip_stability_tests_smg', default = 'no'),
         #'background_verbose': options.get_int(option_section,'background_verbose', default=1),
@@ -77,8 +80,8 @@ def get_class_inputs(block, config, qs_gr_flag=False):
         }
     params['sBBN file'] = config['sBBN file']
 
-    if config['k_output_values'] != '':
-        params['k_output_values'] = config['k_output_values']
+    #if config['k_output_values'] != '':
+    #    params['k_output_values'] = config['k_output_values']
 
     if block.has_value(cosmo, '100*theta_s'):
         params['100*theta_s'] = block[cosmo, '100*theta_s']
@@ -88,6 +91,20 @@ def get_class_inputs(block, config, qs_gr_flag=False):
         params['A_s'] = block[cosmo, 'A_s']
     if block.has_value(cosmo, 'logA'):
         params['ln10^{10}A_s'] = block[cosmo, 'logA']
+
+    h0 = block[cosmo, 'h0']
+    kmax = config['kmax']*h0
+    kmin = config['kmin']*h0
+    nk = config['nk']
+    k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
+
+    k_output_values = ''
+    for ik in k:
+        k_output_values = k_output_values+'{0:.4e},'.format(ik)
+    k_output_values = k_output_values.rstrip(',')
+
+    #params['k_output_values'] = str(k.tolist()).replace(', ', ',').replace('[', '').replace(']', '')
+    params['k_output_values'] = k_output_values
 
     if block.has_value(horndeski, 'omega_fld'):
         print('Omega_fld not implemented at this stage due to conflict with cosmosis default\n \
@@ -188,44 +205,55 @@ def get_class_outputs_gr(block, c_classy, config):
 
     #Ranges of the redshift and matter power
     dz = 0.01
-    kmin = 1e-5 #1e-4
+    #kmin = 1e-5 #1e-4
     kmax = config['kmax']*h0
-    nk = 200 #1e-5
+    kmin = config['kmin']*h0
+    nk = config['nk']
+    k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
+    #nk = 200 #1e-5
 
     #Define k,z we want to sample
     z = np.arange(0.0, config['zmax']+dz, dz)
-    k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
     nz = len(z)
 
     # Get perturbations, here only phi and psi
-    if config['k_output_values'] != '':
-        perts = c_classy.get_perturbations()
-        a_bgd = 1./(1. + z)
-        #pdb.set_trace()
-        k = np.asarray(config['k_output_values'].split(','), dtype=float)
-        nk = len(k)
-        psi = np.zeros((nk, nz))
-        phi = np.zeros((nk, nz))
-        psi_gr = np.zeros((nk, nz))
-        phi_gr = np.zeros((nk, nz))
+    #if config['k_output_values'] != '':
+    perts = c_classy.get_perturbations()
+    a_bgd = 1./(1. + z)
+    #pdb.set_trace()
+    #k = np.asarray(config['k_output_values'].split(','), dtype=float)
+    #nk = len(k)
+    psi = np.zeros((nk, nz))
+    phi = np.zeros((nk, nz))
+    psi_gr = np.zeros((nk, nz))
+    phi_gr = np.zeros((nk, nz))
 
-        for ik,k_label in enumerate(k):
-            psi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['psi'], bounds_error=False)
-            phi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['phi'], bounds_error=False)
-            psi_gr[ik,:] = psi_spl(a_bgd)
-            phi_gr[ik,:] = phi_spl(a_bgd)
+    for ik,k_label in enumerate(k):
+        psi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['psi'], bounds_error=False)
+        phi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['phi'], bounds_error=False)
+        psi_gr[ik,:] = psi_spl(a_bgd)
+        phi_gr[ik,:] = phi_spl(a_bgd)
 
-            block[cosmo, 'mu0_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)][-1]/perts['scalar'][ik]['psi'][-1]
-            block[cosmo, 'Sigma0_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)][-1] + block[perturbations, 'psi_k_{0}'.format(k_label)][-1])/(perts['scalar'][ik]['psi'][-1] + perts['scalar'][ik]['psi'][-1])
+        block[cosmo, 'mu0_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)][-1]/perts['scalar'][ik]['psi'][-1]
+        block[cosmo, 'Sigma0_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)][-1] + block[perturbations, 'psi_k_{0}'.format(k_label)][-1])/(perts['scalar'][ik]['psi'][-1] + perts['scalar'][ik]['psi'][-1])
 
-        _, _, psi = block.get_grid('perturbations', 'k_h', 'a','psi')
-        _, _, phi = block.get_grid('perturbations', 'k_h', 'a','phi')
+    _, _, psi = block.get_grid('perturbations', 'k_h', 'a','psi')
+    _, _, phi = block.get_grid('perturbations', 'k_h', 'a','phi')
 
-        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'D', (psi + phi)/(psi_gr + phi_gr))
-        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'Sigma', (psi + phi)/(psi_gr + phi_gr))
-        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'eta', psi/phi)
-        block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'mu', (psi)/(psi_gr))
+    k_h = k/h0
+    A_s = block[cosmo, 'A_s']
+    k_pivot = block[cosmo, 'k_pivot']
+    n_s = block[cosmo, 'n_s']
+    pk_primordial = A_s*np.power(k_h/k_pivot, n_s - 1.)
+    tk_weyl = 0.5*(phi.T + psi.T)
 
+    pk_weyl = tk_weyl*tk_weyl*pk_primordial*2.*(np.pi**2.)*k_h*(h0**4.)
+
+    block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'D', (psi + phi)/(psi_gr + phi_gr))
+    block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'Sigma', (psi + phi)/(psi_gr + phi_gr))
+    block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'eta', psi/phi)
+    block.put_grid('post_friedmann_parameters', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'mu', (psi)/(psi_gr))
+    block.put_grid('weyl_curvature_spectrum', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'P_k', pk_weyl.T)
 
 def get_class_outputs(block, c_classy, config, qs_gr_flag=False):
     ##
@@ -242,13 +270,16 @@ def get_class_outputs(block, c_classy, config, qs_gr_flag=False):
 
     #Ranges of the redshift and matter power
     dz = 0.01
-    kmin = 1e-5 #1e-4
+    #kmin = 1e-5 #1e-4
+    #kmax = config['kmax']*h0
+    #nk = 200 #1e-5
     kmax = config['kmax']*h0
-    nk = 200 #1e-5
+    kmin = config['kmin']*h0
+    nk = config['nk']
+    k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
 
     #Define k,z we want to sample
     z = np.arange(0.0, config['zmax']+dz, dz)
-    k = np.logspace(np.log10(kmin), np.log10(kmax), nk)
     nz = len(z)
 
     #Extract (interpolate) P(k,z) at the requested
@@ -334,58 +365,69 @@ def get_class_outputs(block, c_classy, config, qs_gr_flag=False):
     block[cmb_cl, 'pp'] = c_ell_data['pp'][2:] * f1
 
     # Get perturbations, here only phi and psi
-    if config['k_output_values'] != '':
-        perts = c_classy.get_perturbations()
-        a_bgd = 1./(1. + z)
+    #if config['k_output_values'] != '':
+    perts = c_classy.get_perturbations()
+    a_bgd = 1./(1. + z)
+    #pdb.set_trace()
+    #k = np.asarray(config['k_output_values'].split(','), dtype=float)
+    #nk = len(k)
+    psi = np.zeros((nk, nz))
+    phi = np.zeros((nk, nz))
+    psi_gr = np.zeros((nk, nz))
+    phi_gr = np.zeros((nk, nz))
+
+    #pdb.set_trace()
+
+    #for i,ki in enumerate(k):
+    for ik,k_label in enumerate(k):
+        psi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['psi'], bounds_error=False)
+        phi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['phi'], bounds_error=False)
+        psi[ik,:] = psi_spl(a_bgd)
+        phi[ik,:] = phi_spl(a_bgd)
+
+        block[perturbations, 'psi_k_{0}'.format(k_label)] = perts['scalar'][ik]['psi']
+        block[perturbations, 'phi_k_{0}'.format(k_label)] = perts['scalar'][ik]['phi']
+        #block[perturbations, 'delta_g_{0}'.format(k_label)] = perts['scalar'][ik]['delta_g']
+        #block[perturbations, 'delta_b_{0}'.format(k_label)] = perts['scalar'][ik]['delta_b']
+        #block[perturbations, 'delta_ur_{0}'.format(k_label)] = perts['scalar'][ik]['delta_ur']
+        #block[perturbations, 'delta_cdm_{0}'.format(k_label)] = perts['scalar'][ik]['delta_cdm']
+        block[perturbations, 'a_k_{0}'.format(k_label)] = perts['scalar'][ik]['a']
+
+    block.put_grid('perturbations', 'k_h', k/h0, 'a', a_bgd, 'psi', psi)
+    block.put_grid('perturbations', 'k_h', k/h0, 'a', a_bgd, 'phi', phi)
+
+    k_h = k/h0
+    A_s = block[cosmo, 'A_s']
+    k_pivot = block[cosmo, 'k_pivot']
+    n_s = block[cosmo, 'n_s']
+    pk_primordial = A_s*np.power(k_h/k_pivot, n_s - 1.)
+    tk_weyl = 0.5*(phi.T + psi.T)
+    pk_weyl = tk_weyl*tk_weyl*pk_primordial*2.*(np.pi**2.)*k_h*(h0**4.)
+    block.put_grid('weyl_curvature_spectrum', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'P_k', pk_weyl.T)
+    '''
+    # for validation of interpolation above
+    for ik,k_label in enumerate(k):
         #pdb.set_trace()
-        k = np.asarray(config['k_output_values'].split(','), dtype=float)
-        nk = len(k)
-        psi = np.zeros((nk, nz))
-        phi = np.zeros((nk, nz))
-        psi_gr = np.zeros((nk, nz))
-        phi_gr = np.zeros((nk, nz))
-
-        #for i,ki in enumerate(k):
-        for ik,k_label in enumerate(k):
-            psi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['psi'], bounds_error=False)
-            phi_spl = interpolate.interp1d(perts['scalar'][ik]['a'], perts['scalar'][ik]['phi'], bounds_error=False)
-            psi[ik,:] = psi_spl(a_bgd)
-            phi[ik,:] = phi_spl(a_bgd)
-
-            block[perturbations, 'psi_k_{0}'.format(k_label)] = perts['scalar'][ik]['psi']
-            block[perturbations, 'phi_k_{0}'.format(k_label)] = perts['scalar'][ik]['phi']
-            #block[perturbations, 'delta_g_{0}'.format(k_label)] = perts['scalar'][ik]['delta_g']
-            #block[perturbations, 'delta_b_{0}'.format(k_label)] = perts['scalar'][ik]['delta_b']
-            #block[perturbations, 'delta_ur_{0}'.format(k_label)] = perts['scalar'][ik]['delta_ur']
-            #block[perturbations, 'delta_cdm_{0}'.format(k_label)] = perts['scalar'][ik]['delta_cdm']
-            block[perturbations, 'a_k_{0}'.format(k_label)] = perts['scalar'][ik]['a']
-
-        block.put_grid('perturbations', 'k_h', k/h0, 'a', a_bgd, 'psi', psi)
-        block.put_grid('perturbations', 'k_h', k/h0, 'a', a_bgd, 'phi', phi)
-        '''
-        # for validation of interpolation above
-        for ik,k_label in enumerate(k):
-            #pdb.set_trace()
-            if qs_gr_flag:
-                #block[perturbations, 'mu_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)]/perts['scalar'][ik]['psi']
-                #block[perturbations, 'Sigma_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)] + block[perturbations, 'psi_k_{0}'.format(k_label)])/(perts['scalar'][ik]['psi'] + perts['scalar'][ik]['psi'])
-                block[cosmo, 'mu0_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)][-1]/perts['scalar'][ik]['psi'][-1]
-                block[cosmo, 'Sigma0_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)][-1] + block[perturbations, 'psi_k_{0}'.format(k_label)][-1])/(perts['scalar'][ik]['psi'][-1] + perts['scalar'][ik]['psi'][-1])
-            else:
-                
-
         if qs_gr_flag:
+            #block[perturbations, 'mu_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)]/perts['scalar'][ik]['psi']
+            #block[perturbations, 'Sigma_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)] + block[perturbations, 'psi_k_{0}'.format(k_label)])/(perts['scalar'][ik]['psi'] + perts['scalar'][ik]['psi'])
+            block[cosmo, 'mu0_k_{0}'.format(k_label)] = block[perturbations, 'psi_k_{0}'.format(k_label)][-1]/perts['scalar'][ik]['psi'][-1]
+            block[cosmo, 'Sigma0_k_{0}'.format(k_label)] = (block[perturbations, 'phi_k_{0}'.format(k_label)][-1] + block[perturbations, 'psi_k_{0}'.format(k_label)][-1])/(perts['scalar'][ik]['psi'][-1] + perts['scalar'][ik]['psi'][-1])
+        else:
+            
 
-            for i,ki in enumerate(k):
-                psi_gr_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['psi'], bounds_error=False)
-                phi_gr_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['phi'], bounds_error=False)
-                psi_gr[i,:] = psi_spl(a_bgd)
-                phi_gr[i,:] = phi_spl(a_bgd)
+    if qs_gr_flag:
 
-            block.put_grid('Sigma', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'Sigma', (psi + phi)/(psi_gr + phi_gr))
-            block['modified_gravity', 'k_h'] = k/h0
-            block['modified_gravity', 'z'] = 1./a_bgd - 1
-            block['modified_gravity', 'D'] = (psi + phi)/(psi_gr + phi_gr)
+        for i,ki in enumerate(k):
+            psi_gr_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['psi'], bounds_error=False)
+            phi_gr_spl = interpolate.interp1d(perts['scalar'][i]['a'], perts['scalar'][i]['phi'], bounds_error=False)
+            psi_gr[i,:] = psi_spl(a_bgd)
+            phi_gr[i,:] = phi_spl(a_bgd)
+
+        block.put_grid('Sigma', 'k_h', k/h0, 'z', 1./a_bgd - 1, 'Sigma', (psi + phi)/(psi_gr + phi_gr))
+        block['modified_gravity', 'k_h'] = k/h0
+        block['modified_gravity', 'z'] = 1./a_bgd - 1
+        block['modified_gravity', 'D'] = (psi + phi)/(psi_gr + phi_gr)
         '''
 
 
@@ -399,7 +441,7 @@ def execute(block, config):
     try:
         # Run calculations
         c_classy.compute()
-        print(params)
+        #print(params)
         # Extract outputs
         get_class_outputs(block, c_classy, config)
     except classy.CosmoError as error:
@@ -417,7 +459,7 @@ def execute(block, config):
     if config['do_qs']:
         params = get_class_inputs(block, config)
         params['parameters_smg'] = '1.0,0.0,0.0,0.0,1.0'
-        print(params)
+        #print(params)
         c_classy.set(params)
         try:
             # Run calculations
